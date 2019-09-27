@@ -1,6 +1,8 @@
 function [peak_freqs, S, F, T, P] = extract_peak_freqs(input, fs, npeaks, winlen, overlap, thresh, NFFT, peak_prom)
-%EXTRACT_PEAK_FREQS  Function returns top npeaks frequencies from input
-%      
+%EXTRACT_PEAK_FREQS  Returns list of peak frequencies from an input signal
+%   
+%   Returns the complex double FFT and the power spectrum for each frame,
+%   and vectors for the time and frequency axes.
 %
 %   Author: Jaime Domingo
 
