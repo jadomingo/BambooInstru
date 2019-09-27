@@ -1,3 +1,12 @@
+%%MAIN Generates a spreadsheet with a list of peak frequencies.
+%
+%   Generates an .xlsx spreadsheet containing the list of peak frequencies
+%   from the group of files that were selected.
+%
+%   Assumes the input files follow a specific naming convention.
+%
+%   Author: Jaime Domingo
+
 clear; clc; close all;
 
 %%  Take inputs
@@ -6,6 +15,7 @@ clear; clc; close all;
 [files,paths] = uigetfile('.wav','multiselect','on');
 
 %%  Set parameters
+
 npeaks = 16;
 winlen = 0.02;
 overlap = 0.01;
@@ -23,6 +33,7 @@ for i = 1 : numel(files)
 end
 
 %%  Create Table
+
 path_split = strsplit(paths,'\');
 table_name = strcat(path_split{end-2},'.xlsx');
 
