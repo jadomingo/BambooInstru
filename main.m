@@ -19,7 +19,7 @@ for i = 1 : numel(files)
     input = sum(input,2)/2;
     n = 2^nextpow2(length(input));
     
-    [peak_freqs{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(input, fs, npeaks, winlen, overlap, thresh, n, peak_prom);
+    [peak_freqs{i}, S{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(input, fs, npeaks, winlen, overlap, thresh, n, peak_prom);
 end
 
 %%  Create Table
