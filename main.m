@@ -20,7 +20,7 @@ npeaks = 16;
 winlen = 0.02;
 overlap = 0.01;
 thresh = -inf;
-peak_prom = 1;
+peak_prom = 0;
 
 %%  Extract peak frequencies
 
@@ -36,7 +36,7 @@ end
 %%  Create Table
 
 path_split = strsplit(paths,'\');
-table_name = strcat(path_split{end-2},'.xlsx');
+table_name = strcat(path_split{end-1},'.xlsx');
 
 for i = 1 : numel(files)
     new_files{i} = strcat('Note_',files{i}(1:end-4));
