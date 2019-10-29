@@ -17,10 +17,11 @@ n = 2^nextpow2(length(input));
 %   Find first few peaks with specific minimum peak prominence 
 %   and peak height
 
+npeaks = 100;
+
 winlen = 0.02; % seconds
 overlap = 0.01;
 NFFT = n;
-npeaks = 8;
 thresh = -120;
 peak_prom = 0;
 % freq_width = 512;
@@ -36,6 +37,7 @@ max_freq_spec = max(10*log10(P),[],2);
     'minpeakheight',thresh,...
     'sortstr','descend',...
     'minpeakprominence',peak_prom,...
+    'minpeakdistance',100,...
     'npeaks',npeaks);   
 
 figure;

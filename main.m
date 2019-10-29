@@ -14,30 +14,57 @@ clear; clc; close all;
 
 [files,paths] = uigetfile('.wav','multiselect','on');
 
-%%  Set parameters
+%%  Initialize parameters
 
-npeaks = 8;
+npeaks = 100;
 winlen = 0.02;
 overlap = 0.01;
 thresh = -inf;
 peak_prom = 0;
 
+%   Initialize empty cells
+peak_locs = cell(1,numel(files));
+peak_freqs = cell(1,numel(files));
+peak_freqs_out = cell(1,numel(files));
+S = cell(1,numel(files));
+F = cell(1,numel(files));
+T = cell(1,numel(files));
+P = cell(1,numel(files));
+
+input_length = zeros(1,numel(files));
+fs = zeros(1,numel(files));
+
 %%  Extract peak frequencies
 
+%   Populate empty cells
 for i = 1 : numel(files)
-    [input,fs] = audioread(strcat(paths,files{i}));
-    input = sum(input,2)/2;
-    n = 2^nextpow2(length(input));
+    [input,fs(i)] = audioread(strcat(paths,files{i}));
+    mono = sum(input,2)/2;
+    n = 2^nextpow2(length(mono));
     
-    [peak_freqs{i}, S{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(input,...
-        fs, npeaks, winlen, overlap, thresh, n, peak_prom);
+    %   get numel for each input to be used later
+    input_length(i) = length(mono);
     
-    peak_freqs{i} = round(peak_freqs{i},2);
+    %   get spectrogram of each audio file
+    [peak_locs{i}, S{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(mono,...
+        fs(i), npeaks, winlen, overlap, thresh, n, peak_prom);
+end
+
+%   get peak frequencies in F from the peak locations
+for i = 1 : numel(files)
+    peak_freqs{i} = F{i}(peak_locs{i});
+    peak_freqs_out{i} = round(peak_freqs{i});
 end
 
 %%  Generate SOS
 
+sample = cell(1,numel(files));
 
+for i = 1 : numel(files)
+    temp_envs = abs(S{i});
+    
+    sample{i} = SOS_gen(peak_locs{i},temp_envs,input_length(i),fs(i),F{i},T{i});
+end
 
 
 %%  Write tables to file
@@ -60,7 +87,7 @@ for i = 1:npeaks
     varnames{i} = strcat('F',int2str(i-1));
 end
 
-table = array2table(cell2mat(peak_freqs));
+table = array2table(cell2mat(peak_freqs_out));
 
 rot_table = cell2table(table2cell(table)','VariableNames',varnames,'RowNames',new_files);
 
