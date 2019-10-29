@@ -16,7 +16,7 @@ clear; clc; close all;
 
 %%  Set parameters
 
-npeaks = 16;
+npeaks = 8;
 winlen = 0.02;
 overlap = 0.01;
 thresh = -inf;
@@ -31,17 +31,40 @@ for i = 1 : numel(files)
     
     [peak_freqs{i}, S{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(input,...
         fs, npeaks, winlen, overlap, thresh, n, peak_prom);
+    
+    peak_freqs{i} = round(peak_freqs{i},2);
 end
 
-%%  Create Table
+%%  Generate SOS
+
+
+
+
+%%  Write tables to file
 
 path_split = strsplit(paths,'\');
-table_name = strcat(path_split{end-1},'.xlsx');
+table_name = strcat(path_split{end-1},'.csv');
 
+new_files = files;
 for i = 1 : numel(files)
-    new_files{i} = strcat('Note_',files{i}(1:end-4));
+    new_files{i} = new_files{i}(1:3);
+    new_files{i}(1:2) = [new_files{i}(2) new_files{i}(1)];
+    if(new_files{i}(3) == 's')
+        new_files{i}(3) = '#';
+    else
+        new_files{i} = new_files{i}(1:2);
+    end
 end
 
-table = array2table(cell2mat(peak_freqs),'VariableNames',new_files);
+for i = 1:npeaks
+    varnames{i} = strcat('F',int2str(i-1));
+end
 
-writetable(table,strcat('freq_tables\',table_name),'Sheet',1);
+table = array2table(cell2mat(peak_freqs));
+
+rot_table = cell2table(table2cell(table)','VariableNames',varnames,'RowNames',new_files);
+
+writetable(rot_table,strcat('freq_tables\csv\Marimba\',table_name),...
+    'FileType','spreadsheet',...
+    'WriteVariableNames',true,...
+    'WriteRowNames',true);
