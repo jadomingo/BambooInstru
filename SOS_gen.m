@@ -27,6 +27,6 @@ freqs = sin(2*pi*F(peak_locs)*Time);
 %   Additively combine sines and normalize to highest peak
 output = An .* freqs;
 output = sum(output,1)/numel(peak_locs);
-output = output/max(abs(output(:)));
+% output = output/max(abs(output(:)));
 
 end
