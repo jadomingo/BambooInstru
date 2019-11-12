@@ -3,7 +3,7 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-[input,fs] = audioread('source\Bumbong\OrigCalabig-Bumbong\3a.wav');
+[input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4d.wav');
 input = sum(input,2)/2;
 input = input/max(abs(input(:)));
 
@@ -17,7 +17,7 @@ n = 2^nextpow2(length(input));
 %   Find first few peaks with specific minimum peak prominence 
 %   and peak height
 
-npeaks = 100;
+npeaks = 200;
 
 winlen = 0.02; % seconds
 overlap = 0.01;
@@ -37,7 +37,7 @@ max_freq_spec = max(10*log10(P),[],2);
     'minpeakheight',thresh,...
     'sortstr','descend',...
     'minpeakprominence',peak_prom,...
-    'minpeakdistance',100,...
+    'minpeakdistance',80,...
     'npeaks',npeaks);   
 
 figure;
@@ -84,16 +84,15 @@ for i = 1:numel(peak_locs)
 %             buf = P(1:end,:);
 %         end
 %     end
-    freq_temporal_env(i,:) = max(P(peak_locs(i),:),[],1);
+    freq_temporal_env(i,:) = max(abs(S(peak_locs(i),:)),[],1);
 end
 
 %   Plot temporal envelopes per peak partial
 figure;
-plot(T,10*log10(freq_temporal_env));
+plot(T,20*log10(freq_temporal_env));
 xlabel('Time (s)');
 ylabel('Gain (dB)');
 title('Gain Envelopes per Partial');
-legend('f0','f1','f2','f3','f4','f5','f6','f7','Location','northeast');
 grid on;
 axis([0 numel(input)/fs -inf inf]);
 
@@ -147,26 +146,30 @@ L = fs/f0;
 delta = L - floor(L);
 eta = (1-delta)/(delta+1);
 
-forder = 32 + 1;
+forder = 16;
 
 %   Compute gain coefficent per peak frequency
 gain = 10.^((L*g(:,1))/(20*NFFT));
 
-% [b,a] = invfreqz([0; gain; 0],[0; F(peak_locs)/(fs/2); 1],1,0);
-b = fir2(forder,[0; F(peak_locs)/(fs/2); 1],[0; gain; 0]);
+[b,a] = invfreqz([0; gain; 0],pi*[0; F(peak_locs)/(fs/2); 1],32,0);
 
 %   TODO: Fix pseudo-inverse filter
 % exc = filter([1 zeros(1,floor(L)-1)],1+[b zeros(1,floor(L))],input);
+arraydir = length(b) == size(b);
+% num = 1;
+% den = 
+num = 1;
+den = [1 zeros(arraydir*(round(L)-1) + ~arraydir) -b];
 
-exc = filter(1+[b zeros(1,floor(L))],[1 zeros(1,floor(L)-1)],input);
+exc = deconvwnr(input,impz(b,a),1);
 
-exc = exc./max(abs(exc(:)));
+% exc = exc./max(abs(exc(:)));
 
 figure;
 [H,~] = freqz(b,1,numel(F));
-plot(F,10*log10(abs(H)));
+plot(F,mag2db(abs(H)));
 hold on;grid on;
-h = stem(F,10*log10(sum(gain .* (F(:)' == F(peak_locs)),1)));%axis([0 fs/2 -30 0]);
+h = stem(F,20*log10(sum(gain .* (F(:)' == F(peak_locs)),1)));%axis([0 fs/2 -30 0]);
 h.BaseValue = -60;
 xlabel('Frequency (Hz)');
 ylabel('Gain (dB)');
