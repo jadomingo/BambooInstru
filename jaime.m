@@ -3,7 +3,7 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-[input,fs] = audioread('source\Angklung_Cleaned\Toledov2-cavite\new\4C.wav');
+[input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4d.wav');
 input = sum(input,2)/2;
 input = input/max(abs(input(:)));
 
@@ -17,25 +17,27 @@ n = 2^nextpow2(length(input));
 %   Find first few peaks with specific minimum peak prominence 
 %   and peak height
 
+npeaks = 200;
+
 winlen = 0.02; % seconds
 overlap = 0.01;
 NFFT = n;
-npeaks = 8;
 thresh = -120;
-peak_prom = 1;
-freq_width = 0;
+peak_prom = 0;
+% freq_width = 512;
 
 
 [S,F,T,P] = spectrogram(input,blackman(round(fs*winlen)),...
     round(fs*winlen*overlap),NFFT,fs,'power','yaxis');
 
 max_freq_spec = max(10*log10(P),[],2);
-%max_freq_spec = max(mag2db(abs(S)),[],2);
+% max_freq_spec = max(mag2db(abs(S)),[],2);
 
 [peaks,peak_locs] = findpeaks(max_freq_spec,...
     'minpeakheight',thresh,...
     'sortstr','descend',...
     'minpeakprominence',peak_prom,...
+    'minpeakdistance',80,...
     'npeaks',npeaks);   
 
 figure;
@@ -46,15 +48,14 @@ title('Spectrogram Gain vs Frequency - C4');
 
 axis([0 fs/2 -inf inf]);
 grid on;
-%%
+%
 hold on;
 plot(F(peak_locs),peaks,'v');
 hold off;
 
-peak_locs = sort(peak_locs);
+peak_locs = sort(peak_locs); % determines if fundamental frequency is first peak or highest peak
 
-%%      test
-%P = (abs(S));
+% P = (abs(S));
 
 %%  Temporal envelopes per partial frequency
 %   Get temporal envelopes of frequency bands within `freq_width` Hz from
@@ -66,33 +67,32 @@ peak_locs = sort(peak_locs);
 
 %   Fill buffer with magnitude data of freuency band surrounding peaks and
 %   get the highest points
-limit = ceil(freq_width*((NFFT/2)+1)/(fs/2));
-buf = zeros(2*limit+1,numel(T));
+% limit = ceil(freq_width*((NFFT/2)+1)/(fs/2));
+% buf = zeros(2*limit+1,numel(T));
 freq_temporal_env = zeros(numel(peak_locs),numel(T));
 for i = 1:numel(peak_locs)
-    if (F(peak_locs(i)) > limit)
-        if (F(peak_locs(i)) + limit <= fs/2)
-            buf = P(peak_locs(i)-limit:peak_locs(i)+limit,:);
-        else
-            buf = P(peak_locs(i)-limit:end,:);
-        end
-    else
-        if (F(peak_locs(i)) + limit <= fs/2)
-            buf = P(1:peak_locs(i)+limit,:);
-        else     
-            buf = P(1:end,:);
-        end
-    end
-    freq_temporal_env(i,:) = max(buf,[],1);
+%     if (F(peak_locs(i)) > limit)
+%         if (F(peak_locs(i)) + limit <= fs/2)
+%             buf = P(peak_locs(i)-limit:peak_locs(i)+limit,:);
+%         else
+%             buf = P(peak_locs(i)-limit:end,:);
+%         end
+%     else
+%         if (F(peak_locs(i)) + limit <= fs/2)
+%             buf = P(1:peak_locs(i)+limit,:);
+%         else     
+%             buf = P(1:end,:);
+%         end
+%     end
+    freq_temporal_env(i,:) = max(abs(S(peak_locs(i),:)),[],1);
 end
 
 %   Plot temporal envelopes per peak partial
 figure;
-plot(T,10*log10(freq_temporal_env));
+plot(T,20*log10(freq_temporal_env));
 xlabel('Time (s)');
 ylabel('Gain (dB)');
 title('Gain Envelopes per Partial');
-legend('f0','f1','f2','f3','f4','f5','f6','f7','Location','northeast');
 grid on;
 axis([0 numel(input)/fs -inf inf]);
 
@@ -112,17 +112,27 @@ out = An .* freqs;
 out = sum(out,1);
 out = out./max(abs(out(:)));
 
+%%  find start of decay and release portion
+
+[~,peak_amp_index] = findpeaks((freq_temporal_env(1,:)),'npeaks',1,'sortstr','descend'); % gets rightmost peak
+
+% figure;
+% plot(T,freq_temporal_env(1,:));
+% hold on;
+% plot(T(zx),freq_temporal_env(1,zx),'x');
+% hold off;
+
 %%  Get Decay Slopes
 %   Get linear slope of decay part 
 
 %   TODO: Programatically find end of decay segment
-% T_new = (T>1);
-% FTE_new = freq_temporal_env(:,T_new);
+T_new = T(peak_amp_index:end);
+FTE_new = freq_temporal_env(:,peak_amp_index:end);
 
 hold on;
-for i = 1: numel(peak_locs)
-    g(i,:) = polyfit(T,10*log10(freq_temporal_env(i,:)),1);
-    plot(T,polyval(g(i,:),T),'--k'); 
+for i = 1: length(peak_locs)
+    g(i,:) = polyfit(T_new,10*log10(FTE_new(i,:)),1);
+    plot(T_new,polyval(g(i,:),T_new),'--k'); 
 end
 hold off;
 legend('f0','f1','f2','f3','Location','northeast');
@@ -136,22 +146,30 @@ L = fs/f0;
 delta = L - floor(L);
 eta = (1-delta)/(delta+1);
 
+forder = 16;
+
 %   Compute gain coefficent per peak frequency
 gain = 10.^((L*g(:,1))/(20*NFFT));
 
-[b,a] = invfreqz([0; gain; 0],[0; F(peak_locs)/(fs/2); 1],1,0);
+[b,a] = invfreqz([0; gain; 0],pi*[0; F(peak_locs)/(fs/2); 1],32,0);
 
 %   TODO: Fix pseudo-inverse filter
 % exc = filter([1 zeros(1,floor(L)-1)],1+[b zeros(1,floor(L))],input);
-exc = filter(1+[b zeros(1,floor(L))],[1 zeros(1,floor(L)-1)],input);
+arraydir = length(b) == size(b);
+% num = 1;
+% den = 
+num = 1;
+den = [1 zeros(arraydir*(round(L)-1) + ~arraydir) -b];
 
-exc = exc./max(abs(exc(:)));
+exc = deconvwnr(input,impz(b,a),1);
+
+% exc = exc./max(abs(exc(:)));
 
 figure;
 [H,~] = freqz(b,1,numel(F));
-plot(F,10*log10(abs(H)));
+plot(F,mag2db(abs(H)));
 hold on;grid on;
-h = stem(F,10*log10(sum(gain .* (F(:)' == F(peak_locs)),1)));%axis([0 fs/2 -30 0]);
+h = stem(F,20*log10(sum(gain .* (F(:)' == F(peak_locs)),1)));%axis([0 fs/2 -30 0]);
 h.BaseValue = -60;
 xlabel('Frequency (Hz)');
 ylabel('Gain (dB)');
