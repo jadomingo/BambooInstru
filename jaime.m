@@ -3,7 +3,8 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-[input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4d.wav');
+[input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\4b.wav');
+% [input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4b.wav');
 input = sum(input,2)/2;
 input = input/max(abs(input(:)));
 
@@ -53,8 +54,7 @@ hold on;
 plot(F(peak_locs),peaks,'v');
 hold off;
 
-peak_locs = sort(peak_locs); % determines if fundamental frequency is first peak or highest peak
-
+sort_peak_locs = sort(peak_locs);
 % P = (abs(S));
 
 %%  Temporal envelopes per partial frequency
@@ -69,27 +69,14 @@ peak_locs = sort(peak_locs); % determines if fundamental frequency is first peak
 %   get the highest points
 % limit = ceil(freq_width*((NFFT/2)+1)/(fs/2));
 % buf = zeros(2*limit+1,numel(T));
-freq_temporal_env = zeros(numel(peak_locs),numel(T));
-for i = 1:numel(peak_locs)
-%     if (F(peak_locs(i)) > limit)
-%         if (F(peak_locs(i)) + limit <= fs/2)
-%             buf = P(peak_locs(i)-limit:peak_locs(i)+limit,:);
-%         else
-%             buf = P(peak_locs(i)-limit:end,:);
-%         end
-%     else
-%         if (F(peak_locs(i)) + limit <= fs/2)
-%             buf = P(1:peak_locs(i)+limit,:);
-%         else     
-%             buf = P(1:end,:);
-%         end
-%     end
-    freq_temporal_env(i,:) = max(abs(S(peak_locs(i),:)),[],1);
+freq_temporal_env = zeros(numel(sort_peak_locs),numel(T));
+for i = 1:numel(sort_peak_locs)
+    freq_temporal_env(i,:) = max(abs(S(sort_peak_locs(i),:)),[],1);
 end
 
 %   Plot temporal envelopes per peak partial
 figure;
-plot(T,20*log10(freq_temporal_env));
+plot(T,mag2db(freq_temporal_env));
 xlabel('Time (s)');
 ylabel('Gain (dB)');
 title('Gain Envelopes per Partial');
@@ -105,7 +92,7 @@ An = resample(freq_temporal_env',numel(input),numel(T))';
 Time = linspace(0,(numel(input)-1)/fs,numel(input));
 
 %   Generate pure sines with frequecies same as picked peaks
-freqs = sin(2*pi*F(peak_locs)*Time);
+freqs = sin(2*pi*F(sort_peak_locs)*Time);
 
 %   Additively combine sines and normalize to highest peak
 out = An .* freqs;
@@ -130,8 +117,8 @@ T_new = T(peak_amp_index:end);
 FTE_new = freq_temporal_env(:,peak_amp_index:end);
 
 hold on;
-for i = 1: length(peak_locs)
-    g(i,:) = polyfit(T_new,10*log10(FTE_new(i,:)),1);
+for i = 1: length(sort_peak_locs)
+    g(i,:) = polyfit(T_new,mag2db(FTE_new(i,:)),1);
     plot(T_new,polyval(g(i,:),T_new),'--k'); 
 end
 hold off;
@@ -146,22 +133,18 @@ L = fs/f0;
 delta = L - floor(L);
 eta = (1-delta)/(delta+1);
 
-forder = 16;
+forder = 32;
 
 %   Compute gain coefficent per peak frequency
 gain = 10.^((L*g(:,1))/(20*NFFT));
 
-[b,a] = invfreqz([0; gain; 0],pi*[0; F(peak_locs)/(fs/2); 1],32,0);
+[b,a] = invfreqz([1; gain; 1],pi*[0; F(sort_peak_locs)/(fs/2); 1],forder,0);
 
 %   TODO: Fix pseudo-inverse filter
-% exc = filter([1 zeros(1,floor(L)-1)],1+[b zeros(1,floor(L))],input);
-arraydir = length(b) == size(b);
-% num = 1;
-% den = 
-num = 1;
-den = [1 zeros(arraydir*(round(L)-1) + ~arraydir) -b];
 
-exc = deconvwnr(input,impz(b,a),1);
+den = [1,zeros(1,round(L)),-b];
+impulse = impz(1,den);
+exc = deconvwnr(input,impulse(1:6000),0);
 
 % exc = exc./max(abs(exc(:)));
 
@@ -169,7 +152,7 @@ figure;
 [H,~] = freqz(b,1,numel(F));
 plot(F,mag2db(abs(H)));
 hold on;grid on;
-h = stem(F,20*log10(sum(gain .* (F(:)' == F(peak_locs)),1)));%axis([0 fs/2 -30 0]);
+h = stem(F,mag2db(sum(gain .* (F(:)' == F(sort_peak_locs)),1)));%axis([0 fs/2 -30 0]);
 h.BaseValue = -60;
 xlabel('Frequency (Hz)');
 ylabel('Gain (dB)');
