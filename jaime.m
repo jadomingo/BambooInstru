@@ -3,8 +3,8 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-[input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\4b.wav');
-% [input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4b.wav');
+% [input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\4C.wav');
+[input,fs] = audioread('source\Angklung\Toledov2-Cavite\4b.wav');
 input = sum(input,2)/2;
 input = input/max(abs(input(:)));
 
@@ -27,6 +27,8 @@ thresh = -120;
 peak_prom = 0;
 % freq_width = 512;
 
+cutoff = 12e3;
+
 
 [S,F,T,P] = spectrogram(input,blackman(round(fs*winlen)),...
     round(fs*winlen*overlap),NFFT,fs,'power','yaxis');
@@ -38,7 +40,7 @@ max_freq_spec = max(10*log10(P),[],2);
     'minpeakheight',thresh,...
     'sortstr','descend',...
     'minpeakprominence',peak_prom,...
-    'minpeakdistance',80,...
+    'minpeakdistance',20,...
     'npeaks',npeaks);   
 
 figure;
@@ -51,10 +53,13 @@ axis([0 fs/2 -inf inf]);
 grid on;
 %
 hold on;
-plot(F(peak_locs),peaks,'v');
+peak_freqs = F(peak_locs);
+peak_freqs_cutoff = cat(2,peak_freqs(peak_freqs < cutoff),peaks(peak_freqs < cutoff));
+plot(peak_freqs_cutoff(:,1),peak_freqs_cutoff(:,2),'v');
 hold off;
 
-sort_peak_locs = sort(peak_locs);
+% sort_peak_locs = sort(peak_locs);
+sort_peak_locs = sort(peak_locs(peak_freqs < cutoff));
 % P = (abs(S));
 
 %%  Temporal envelopes per partial frequency
