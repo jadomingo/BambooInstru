@@ -3,10 +3,10 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-% [input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\4C.wav');
-[input,fs] = audioread('source\Angklung\Toledov2-Cavite\4b.wav');
+% [input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\3a.wav');
+[input,fs] = audioread('source\Marimba\Toledo2v2-Marimba-Cavite\4a.wav');
+% [input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4c.wav');
 input = sum(input,2)/2;
-input = input/max(abs(input(:)));
 
 %%  Padding
 %   Pad zeros to end of audio file
@@ -18,17 +18,16 @@ n = 2^nextpow2(length(input));
 %   Find first few peaks with specific minimum peak prominence 
 %   and peak height
 
-npeaks = 200;
+npeaks = 3;
 
 winlen = 0.02; % seconds
 overlap = 0.01;
 NFFT = n;
 thresh = -120;
 peak_prom = 0;
-% freq_width = 512;
+min_peak_distance = 50;
 
-cutoff = 12e3;
-
+cutoff = fs/2;
 
 [S,F,T,P] = spectrogram(input,blackman(round(fs*winlen)),...
     round(fs*winlen*overlap),NFFT,fs,'power','yaxis');
@@ -40,7 +39,7 @@ max_freq_spec = max(10*log10(P),[],2);
     'minpeakheight',thresh,...
     'sortstr','descend',...
     'minpeakprominence',peak_prom,...
-    'minpeakdistance',20,...
+    'minpeakdistance',min_peak_distance,...
     'npeaks',npeaks);   
 
 figure;
@@ -49,7 +48,7 @@ xlabel('Frequency (Hz)');
 ylabel('Gain (dB)');
 title('Spectrogram Gain vs Frequency - C4');
 
-axis([0 fs/2 -inf inf]);
+xlim([0 fs/2])
 grid on;
 %
 hold on;
@@ -60,6 +59,7 @@ hold off;
 
 % sort_peak_locs = sort(peak_locs);
 sort_peak_locs = sort(peak_locs(peak_freqs < cutoff));
+peak_locs = peak_locs(peak_freqs < cutoff);
 % P = (abs(S));
 
 %%  Temporal envelopes per partial frequency
@@ -76,17 +76,18 @@ sort_peak_locs = sort(peak_locs(peak_freqs < cutoff));
 % buf = zeros(2*limit+1,numel(T));
 freq_temporal_env = zeros(numel(sort_peak_locs),numel(T));
 for i = 1:numel(sort_peak_locs)
-    freq_temporal_env(i,:) = max(abs(S(sort_peak_locs(i),:)),[],1);
+    freq_temporal_env(i,:) = max(abs(P(sort_peak_locs(i),:)),[],1);
 end
 
 %   Plot temporal envelopes per peak partial
 figure;
-plot(T,mag2db(freq_temporal_env));
+plot(T,10*log10(freq_temporal_env));
 xlabel('Time (s)');
 ylabel('Gain (dB)');
 title('Gain Envelopes per Partial');
 grid on;
-axis([0 numel(input)/fs -inf inf]);
+% axis([0 numel(input)/fs -inf inf]);
+xlim([0 numel(input)/fs]);
 
 %%  Synthesize using SOS
 
@@ -102,7 +103,7 @@ freqs = sin(2*pi*F(sort_peak_locs)*Time);
 %   Additively combine sines and normalize to highest peak
 out = An .* freqs;
 out = sum(out,1);
-out = out./max(abs(out(:)));
+% out = out./max(abs(out(:)));
 
 %%  find start of decay and release portion
 
@@ -123,7 +124,7 @@ FTE_new = freq_temporal_env(:,peak_amp_index:end);
 
 hold on;
 for i = 1: length(sort_peak_locs)
-    g(i,:) = polyfit(T_new,mag2db(FTE_new(i,:)),1);
+    g(i,:) = polyfit(T_new,10*log10(FTE_new(i,:)),1);
     plot(T_new,polyval(g(i,:),T_new),'--k'); 
 end
 hold off;
@@ -135,23 +136,32 @@ legend('f0','f1','f2','f3','Location','northeast');
 %   filter
 f0 = F(peak_locs(1));
 L = fs/f0;
-delta = L - floor(L);
-eta = (1-delta)/(delta+1);
+nu = L - floor(L);
 
-forder = 32;
+forder = 8;
 
 %   Compute gain coefficent per peak frequency
 gain = 10.^((L*g(:,1))/(20*NFFT));
 
-[b,a] = invfreqz([1; gain; 1],pi*[0; F(sort_peak_locs)/(fs/2); 1],forder,0);
+%   clip gains
+gain(gain>=1) = 1;
 
-%   TODO: Fix pseudo-inverse filter
+[b,~] = invfreqz([1; gain; 0],pi*[0; F(sort_peak_locs)/(fs/2) ; 1],forder,0);
 
-den = [1,zeros(1,round(L)),-b];
+
+% transfer function magic
+den = (1-nu)*[zeros(1,round(L)),-b,0] + nu*[0,zeros(1,round(L)),-b];
+den(1) = 1;
+
 impulse = impz(1,den);
-exc = deconvwnr(input,impulse(1:6000),0);
 
-% exc = exc./max(abs(exc(:)));
+if (length(impulse) > length(input))
+    exc = deconvwnr(input,impulse(1:length(input)),0);
+else
+    exc = deconvwnr(input,impulse,0);
+end
+
+%soundsc(filter(1,den,repmat(exc(Time>0.4431 & Time<.4521),100,1)),fs) 'source\Bumbong\Toledov2-Bumbong-Cavite\3a.wav'
 
 figure;
 [H,~] = freqz(b,1,numel(F));
