@@ -16,11 +16,12 @@ clear; clc; close all;
 
 %%  Initialize parameters
 
-npeaks = 120;
+npeaks = 16;
 winlen = 0.02;
 overlap = 0.01;
-thresh = -120;
-peak_prom = 0;
+thresh = -90;
+peak_prom = 4;
+peak_dist = 16;
 
 %   Initialize empty cells
 peak_locs = cell(1,numel(files));
@@ -37,18 +38,24 @@ fs = zeros(1,numel(files));
 
 %%  Extract time-frequency information
 
+
 %   Populate empty cells
 for i = 1 : numel(files)
     [input,fs(i)] = audioread(strcat(paths,files{i}));
     mono{i} = sum(input,2)/2;
+    mono{i} = mono{i} / max(abs(mono{i}(:)));
     n(i) = 2^nextpow2(length(mono{i}));
-    
+end
+
+
+
+for i = 1 : numel(files)
     %   get numel for each input to be used later
     input_length(i) = length(mono{i});
     
     %   get spectrogram of each audio file
     [peak_locs{i}, S{i}, F{i}, T{i}, P{i}] = extract_peak_freqs(mono{i},...
-        fs(i), npeaks, winlen, overlap, thresh, n(i), peak_prom);
+        fs(i), npeaks, winlen, overlap, thresh, n(i), peak_prom, peak_dist);
 end
 
 %   get peak frequencies in F from the peak locations
@@ -65,6 +72,8 @@ for i = 1 : numel(files)
     temp_envs = abs(S{i});
     
     output_SOS{i} = SOS_gen(peak_locs{i},temp_envs,input_length(i),fs(i),F{i},T{i});
+    
+    output_SOS{i} = output_SOS{i} / max(abs(output_SOS{i}(:)));
 end
 
 %%  Generate DWG
@@ -122,31 +131,46 @@ xlabel('Frequency (Hz)');
 ylabel('Magnitude (dB)');
 axis([0 fs(1)/2 -inf inf]);
 
+%%  TEST
+
+for i = 1:36
+    subplot(9,4,i);
+    
+    mag = mag2db(fftshift(abs(fft(mono{i},n(1)+1))/(n(1)+1)));
+    
+    plot(linspace(-fs(1)/2,fs(1)/2,n(1) + 1),mag);
+    title(files{i});
+    axis([0 5000 -120 -30]);
+end
+
 %%  Write tables to file
 
-% path_split = strsplit(paths,'\');
-% table_name = strcat(path_split{end-1},'.csv');
-% 
-% new_files = files; 
-% for i = 1 : numel(files)
-%     new_files{i} = new_files{i}(1:3);
-%     new_files{i}(1:2) = [new_files{i}(2) new_files{i}(1)];
-%     if(new_files{i}(3) == 's')
-%         new_files{i}(3) = '#';
-%     else
-%         new_files{i} = new_files{i}(1:2);
-%     end
-% end
-% 
-% for i = 1:npeaks
-%     varnames{i} = strcat('F',int2str(i-1));
-% end
-% 
-% table = array2table(cell2mat(peak_freqs_out));
-% 
-% rot_table = cell2table(table2cell(table)','VariableNames',varnames,'RowNames',new_files);
-% 
-% writetable(rot_table,strcat('freq_tables\csv\Marimba\',table_name),...
-%     'FileType','spreadsheet',...
-%     'WriteVariableNames',true,...
-%     'WriteRowNames',true);
+path_split = strsplit(paths,'\');
+table_name = strcat(path_split{end-1},'.csv');
+
+new_files = files; 
+for i = 1 : numel(files)
+    new_files{i} = new_files{i}(1:3);
+    new_files{i}(1:2) = [new_files{i}(2) new_files{i}(1)];
+    if(new_files{i}(3) == 's')
+        new_files{i}(3) = '#';
+    else
+        new_files{i} = new_files{i}(1:2);
+    end
+end
+
+for i = 1:npeaks
+    varnames{i} = strcat('F',int2str(i-1));
+end
+
+table = array2table(cell2mat(peak_freqs));
+
+rot_table = cell2table(table2cell(table)','VariableNames',varnames,'RowNames',new_files);
+
+
+mkdir('freq_tables_test\csv\Marimba\');
+
+writetable(rot_table,strcat('freq_tables_test\csv\Marimba\',table_name),...
+    'FileType','spreadsheet',...
+    'WriteVariableNames',true,...
+    'WriteRowNames',true);

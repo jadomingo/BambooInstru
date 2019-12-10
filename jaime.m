@@ -3,12 +3,13 @@ clear; clc; close all;
 %%  Take inputs
 %   Take input audio file and flatten to mono
 
-% [input,fs] = audioread('source\Bumbong\Toledov2-Bumbong-Cavite\3a.wav');
-[input,fs] = audioread('source\Marimba\Toledo2v2-Marimba-Cavite\4a.wav');
-% [input,fs] = audioread('source\Angklung\Toledov2-Cavite-Angklung\4c.wav');
+[input,fs] = audioread('source_cleaned\angklung\4c.wav');
+
 input = sum(input,2)/2;
 
-%%  Padding
+input = input / max(abs(input(:)));
+
+% %%  Padding
 %   Pad zeros to end of audio file
 
 %input = [input; zeros(8*ceil(numel(input)/8) - numel(input),1)];
@@ -18,14 +19,14 @@ n = 2^nextpow2(length(input));
 %   Find first few peaks with specific minimum peak prominence 
 %   and peak height
 
-npeaks = 3;
+npeaks = 32;
 
 winlen = 0.02; % seconds
 overlap = 0.01;
 NFFT = n;
-thresh = -120;
-peak_prom = 0;
-min_peak_distance = 50;
+thresh = -inf;
+peak_prom = 2.8;
+min_peak_distance = 8;
 
 cutoff = fs/2;
 
@@ -76,7 +77,7 @@ peak_locs = peak_locs(peak_freqs < cutoff);
 % buf = zeros(2*limit+1,numel(T));
 freq_temporal_env = zeros(numel(sort_peak_locs),numel(T));
 for i = 1:numel(sort_peak_locs)
-    freq_temporal_env(i,:) = max(abs(P(sort_peak_locs(i),:)),[],1);
+    freq_temporal_env(i,:) = max(abs(S(sort_peak_locs(i),:)),[],1);
 end
 
 %   Plot temporal envelopes per peak partial
@@ -101,9 +102,9 @@ Time = linspace(0,(numel(input)-1)/fs,numel(input));
 freqs = sin(2*pi*F(sort_peak_locs)*Time);
 
 %   Additively combine sines and normalize to highest peak
+An = An / max(abs(An(:)));
 out = An .* freqs;
 out = sum(out,1);
-% out = out./max(abs(out(:)));
 
 %%  find start of decay and release portion
 
@@ -119,8 +120,11 @@ out = sum(out,1);
 %   Get linear slope of decay part 
 
 %   TODO: Programatically find end of decay segment
-T_new = T(peak_amp_index:end);
-FTE_new = freq_temporal_env(:,peak_amp_index:end);
+% T_new = T(peak_amp_index:end);
+% FTE_new = freq_temporal_env(:,peak_amp_index:end);
+
+T_new = T(1:end);
+FTE_new = freq_temporal_env(:,1:end);
 
 hold on;
 for i = 1: length(sort_peak_locs)
@@ -179,37 +183,17 @@ legend('Magnitude Resp.','Partial Gains','-3dB','Location','southeast');
 %%  Synthesis
 %   Digital waveguide implementation 
 
-frac_delay = 0;
-forward_delay = zeros(1,floor(L));
-loopfilt = zeros(1,numel(b));
-output = zeros(1,numel(exc));
-
-for i = 1 : numel(exc)                
-        in_forward_delay = exc(i)-sum(b.*loopfilt);
-        in_frac_delay = forward_delay(end) - eta*frac_delay;
-        in_loopfilt = frac_delay+eta*frac_delay;
-        in_output = frac_delay+eta*frac_delay;
-        
-        forward_delay = circshift(forward_delay,1);
-        forward_delay(1) = in_forward_delay;
-        output = circshift(output,-1);
-        output(end) = in_output;
-        frac_delay = in_frac_delay;
-        loopfilt = circshift(loopfilt,1);
-        loopfilt(1) = in_loopfilt;
-end
-output = output./max(abs(output(:)));
-
+output = conv(exc,impulse,'full');
 %%
 
 subplot(311);plot(Time,input);axis([0 1.5 -1 1]);title('Recording');
 subplot(312);plot(Time,exc);axis([0 1.5 -1 1]);title('Excitation');ylabel('Amplitude');
-subplot(313);plot(Time,output./max(abs(output(:))));axis([0 1.5 -1 1]);title('Synthesized');xlabel('Time (s)')
+subplot(313);plot(0:1/fs:numel(output)/fs - 1/fs,output./max(abs(output(:))));axis([0 1.5 -1 1]);title('Synthesized');xlabel('Time (s)')
 
 %%  COMPARE INPUT AND OUTPUT FREQUENCY SPECTRUMS
 
 input_mag = abs(fft(input,n)/n);
-output_mag = abs(fft(out,n)/n);
+output_mag = abs(fft(out,n)/n); 
 subplot(211);plot(linspace(0,fs/2,n/2),mag2db(input_mag(1:n/2)));
 subplot(212);plot(linspace(0,fs/2,n/2),mag2db(output_mag(1:n/2)));
 subplot(211);title('Recording FFT');ylabel('Magnitude (dB)');xlabel('Frequency (Hz)');
@@ -221,6 +205,7 @@ subplot(212);axis([0 10000 -100 -20]);grid on;
 %%  COMPARE INPUT AND OUTPUT WAVEFORMS
 
 
-subplot(211);plot(Time,input);grid on;ylabel('Magnitude');xlabel('Time (s)');
+subplot(311);plot(Time,input);grid on;ylabel('Magnitude');xlabel('Time (s)');
 title('Recorded vs. Synthesized Waveforms - C4');
-subplot(212);plot(Time,out);grid on;ylabel('Magnitude');xlabel('Time (s)');
+subplot(312);plot(Time,out);grid on;ylabel('Magnitude');xlabel('Time (s)');
+subplot(313);plot(Time,output);grid on;ylabel('Magnitude');xlabel('Time (s)');

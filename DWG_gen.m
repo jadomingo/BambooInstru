@@ -33,17 +33,17 @@ end
 %   filter
 f0 = F(peak_locs(1));
 L = fs/f0;
-delta = L - floor(L);
-eta = (1-delta)/(delta+1);
+nu = L - floor(L);
 
 %   Compute gain coefficent per peak frequency
 gain = 10.^((L*g(:,1))/(20*NFFT));
 
-[b,~] = invfreqz([0 ; gain; 0],pi*[0; F(peak_locs)/(fs/2); 1],forder,0);
+[b,~] = invfreqz([0 ; gain ; 0],pi*[0; F(peak_locs)/(fs/2); 1],forder,0);
 
 %   pseudo-inverse filter
 
-den = [1,zeros(1,round(L)),-b];
+den = (1-nu)*[zeros(1,round(L)),-b,0] + nu*[0,zeros(1,round(L)),-b];
+den(1) = 1;
 % den = den(1:5000);%   truncate
 
 end
